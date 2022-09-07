@@ -76,14 +76,16 @@ def grid_search():
         dqdt[i] = (q[i+1] - q[i])/dt
 
     # 1. define parameter ranges for the grid search
-    a_best, b_best, c = plot_pressure_model()
+    a_best = 0.0014742953442818544
+    b_best = 0.06358694243115008
+    c = 0.00804778084921749
 
     # number of values considered for each parameter within a given interval
     N = 51	
 
     # vectors of parameter values
-    a = np.linspace(a_best/2,a_best*1.5, N)
-    b = np.linspace(b_best/2,b_best*1.5, N)
+    a = np.linspace(a_best/1.2,a_best*1.2, N)
+    b = np.linspace(b_best/1.2,b_best*1.2, N)
 
     # grid of parameter values: returns every possible combination of parameters in a and b
     A, B = np.meshgrid(a, b, indexing='ij')
@@ -291,18 +293,93 @@ def prediction_error(samples):
     ax.hist(s)
     ax.axvline(np.interp(1980,t_data,s_data), color='b', label='true process')
 
-    a = 0.0014699848529127948
-    b = 0.06322104915197868
-    c = 0.008719645302839404
-    t,pm = solve_pressure_ode(pressure_ode, t0, t1-dt, dt, p0, q, dqdt, [a,b,c])
-
-    ax.axvline(np.interp(1980,t,subsidence_model(t, pm, d, diffuse_t, t_max)), color='r', label='best model')
-
     ax.axvline(np.percentile(s, 5), color='k', linestyle=':', label='90% interval')
     ax.axvline(np.percentile(s, 90), color='k', linestyle=':')
     ax.set_xlabel('subsidence')
     ax.legend()
     plt.show()
+
+def forward_prediction_with_uncertainty(qf, samples):
+    '''Return heat source parameter q for kettle experiment.
+        Parameters:
+        -----------
+        qf : array
+            an array including the future mass extraction rates.
+        samples : array-like
+            parameter samples from the multivariate normal
+        Returns:
+        --------
+        Nothing
+    '''
+    a = 0.0014699848529127948
+    b = 0.06322104915197868
+    c = 0.008719645302839404
+    pars = [a, b, c]
+    p0 = 56.26
+    dt = 1
+    d = 0.741947934080013
+    d_t = 12.161738208806344
+    tm = 1983.9891553334935
+
+    tp, p = load_pressure_data()
+    ts, s = load_subsidence_data()
+    t0 = tp[0]
+    
+    t_current = np.arange(t0,tp[-1]+2,dt)
+    t_future = np.arange(tp[-1]+2,2030.5,dt)
+    t = np.concatenate((t_current,t_future))
+
+    q0 = interpolate_mass_extraction(t_current)
+
+    pressure = []
+    subsidence = []
+
+    color = ['b-','y-','g','r']
+
+    f,(ax,ax1) = plt.subplots(1,2)
+
+    for i in range(len(qf)):
+        q1 = qf[i]*np.ones(len(t_future))
+        q = np.concatenate((q0,q1))
+        dqdt = q.copy()
+        for j in range(len(q)-1):
+            dqdt[j] = (q[j+1] - q[j])/dt
+
+        for a,b in samples:
+            t, pm = solve_pressure_ode(pressure_ode, t0, 2029.5, dt, p0, q, dqdt, [a,b,c])
+            sub = subsidence_model(t, pm, d, d_t, tm)
+            ax.plot(t,pm,color[i], lw=0.25,alpha=0.2)
+            ax1.plot(t,sub,color[i], lw=0.25,alpha=0.2)
+        ax.plot([],[],color[i], lw=0.5,alpha=0.4, label=f"Mass extraction = {qf[i]}kg/s")
+        ax1.plot([],[],color[i], lw=0.5,alpha=0.4, label=f"Mass extraction = {qf[i]}kg/s")
+
+        pressure.append(pm)
+        subsidence.append(sub)
+
+    # plot data point
+    ax.plot(tp, p, 'x', label="Data points")
+    ax1.plot(ts, s, 'x', label="Data points")
+
+    # plot model
+    ax.plot(t_current,pressure[0][:len(t_current)], label="Model")
+    ax1.plot(t_current,subsidence[0][:len(t_current)], label="Model")
+
+    ax.set_xlabel('Time [yr]')
+    ax.set_ylabel('Pressure [bar]')
+    ax.set_title("Forecast for pressure")
+    ax.legend()
+
+    ax1.set_xlabel('Time [yr]')
+    ax1.set_ylabel('subsidence [m]')
+    ax1.set_title("Forecast for subsidence")
+    ax1.legend()
+
+    save_figure = 0
+    f.set_size_inches(20.,9.)
+    if not save_figure:
+        plt.show()
+    else:
+        plt.savefig('forward prediction', dpi=300)
 
 if __name__=="__main__":
     #get_familiar_with_model()
@@ -311,3 +388,4 @@ if __name__=="__main__":
     samples = construct_samples(a, b, posterior, N)
     model_ensemble(samples)
     prediction_error(samples)
+    forward_prediction_with_uncertainty([1250,900,450,0], samples)
