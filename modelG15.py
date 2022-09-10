@@ -391,7 +391,56 @@ def plot_subsidence_model(a,b,c):
     else:
         plt.savefig('subsidence plot', dpi=300)
 
+def plot_misfit(slow_drainage=False):
+    if slow_drainage:
+        a = 0.0014743000274401211 
+        b = 0.06358718228369616 
+        c = 0.008047762522678324 
+    else:
+        a = 0.0029549369724751317 
+        b = 0.13880954840096363  
+        c = 0 
+    pars = [a, b, c]
+    t0 = 1953
+    t1 = 2013
+    p0 = 56.26
+    dt = 1 
+    t_range = np.arange(t0, t1, dt)
+
+    q = interpolate_mass_extraction(t_range)
+    dqdt = q.copy()
+
+    for i in range(len(q)-1):
+        dqdt[i] = (q[i+1] - q[i])/dt
+
+    t, p = solve_pressure_ode(pressure_ode, t0, t1 - dt, dt, p0, q, dqdt, pars)
+
+    t_data, p_data = load_pressure_data()
+
+    misfit = p - p_data
+
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+
+    # plot pressure observations and numerical solution
+    ax1.plot(t_data, p_data, ".", color="red", label="observations")
+    ax1.plot(t, p, "-", color="black", label= ("a = %.2E\n b = %.2E\n c = %.2E" %(a, b, c)))
+    ax1.set_ylabel('reservoir pressure [bars]')
+    ax1.set_xlabel('time [years]')
+    ax1.legend()
+    ax1.set_title("best fit pressure ODE model")
+
+    # plot subsidence observations and numerical solution
+    ax2.plot(t_data, misfit,'x', color="red")
+    ax2.plot(t_data, np.zeros(len(t_data)), '--', color="black")
+    ax2.set_ylabel('pressure misfit [bars]')
+    ax2.set_xlabel('time [years]')
+    ax2.set_title("best fit pressure ODE model")
+
+    plt.show()
+
 if __name__ == "__main__":
     a, b, c = plot_pressure_model()
     plot_subsidence_model(a, b, c)
     forward_prediction([1250,900,450,0])
+    plot_misfit(True)
+    plot_misfit(False)

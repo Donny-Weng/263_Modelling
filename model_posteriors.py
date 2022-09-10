@@ -379,7 +379,7 @@ def forward_prediction_with_uncertainty(qf, samples):
     if not save_figure:
         plt.show()
     else:
-        plt.savefig('forward prediction', dpi=300)
+        plt.savefig('forward prediction with uncertainty', dpi=300)
 
 if __name__=="__main__":
     #get_familiar_with_model()
